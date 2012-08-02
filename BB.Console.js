@@ -40,9 +40,9 @@ window.console = (function(win){
 			if(toDoList.indexOf(funName) > -1){
 				warn("console."+ funName +"() is not yet supported for remote debugging.");
 			}
-
-			server.call(server, funName, value || stringify(args), stack ? stringify(stack) : '');
 		}
+
+		server.call(server, funName, value || stringify(args), stack ? stringify(stack) : '');
 	};
 	
 	function getFuncName(f){
