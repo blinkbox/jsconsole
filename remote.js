@@ -49,7 +49,7 @@
 					remoteWindow.postMessage(queue[i], origin);
 				}
 			}catch(e){
-				console.logToUI(e.message);
+				console.logToUI(e);
 			}
 		};	
 		
@@ -71,7 +71,7 @@
 					queue.push(msg);
 				}
 			}catch(e){
-				console.logToUI(e.message);
+				console.logToUI(e);
 			}			
 		};
 
@@ -118,7 +118,7 @@
 						queue.push(msg);
 					}
 				}catch(e){
-					console.logToUI(e.message);
+					console.logToUI(e);
 				}				
 			}
 		};
@@ -138,7 +138,7 @@
 			}
 		}
 	}catch(e){
-		console.logToUI(e.message);
+		console.logToUI(e);
 	}
     //warnUsage();
 })();

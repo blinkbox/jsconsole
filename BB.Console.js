@@ -26,7 +26,7 @@ window.console = (function(win){
 		return logger;
 	}
 	
-	function server(funName, values){
+	function server(funName, values, stack){
 		_console.log(arguments);
 	};
 
