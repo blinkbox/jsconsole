@@ -4,7 +4,7 @@ Blinkbox Setting JSConsole locally
 * Open Start -> All Programs -> Node.js (x86) -> Node.js Command Prompt
 * cd to C:\dev\github\jsconsole directory
 * Download the required libraries by running "npm install connect@1.4.0" and "npm install node-uuid@1.1.0" command.
-* Start the server by running "node server.js 8599"
+* Start the server by running "node server.js 8599" OR run start.bat
 * Open browser and navigate to "http://yourhostname:8599/" to access remote console page.
 * Open browser and navigate to your V2 e.g "http://yourhostname/Client/dev/?debug=basic&remoteId=YOURID&port=8599"
 * Execute :listen YOURID to connect to your V2 logs
