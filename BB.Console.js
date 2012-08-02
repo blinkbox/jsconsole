@@ -26,7 +26,7 @@ window.console = (function(win){
 		return logger;
 	}
 	
-	function server(funName, values, stack){
+	function server(funName, values){
 		_console.log(arguments);
 	};
 
@@ -37,7 +37,6 @@ window.console = (function(win){
 			}else{
 				_console[funName].apply(_console, args);
 			}
-			
 			if(toDoList.indexOf(funName) > -1){
 				warn("console."+ funName +"() is not yet supported for remote debugging.");
 			}
@@ -46,24 +45,28 @@ window.console = (function(win){
 		}
 	};
 	
-	function getFuncName (f){
-		if (f.getName instanceof Function){
-			return f.getName();
+	function getFuncName(f){
+		var name;
+		if(f){
+			if (f.getName instanceof Function){
+				return f.getName();
+			}
+			// in FireFox, Function objects have a name property...
+			if (f.name){
+				return f.name;
+			}
+			name = f.toString().match(/function\s*([_$\w\d]*)/)[1];
 		}
-		// in FireFox, Function objects have a name property...
-		if (f.name){
-			return f.name;
-		}
-				
-		var name = f.toString().match(/function\s*([_$\w\d]*)/)[1];
 		return name || "anonymous";
 	};
 			
 	function wasVisited(frames, fn){
-		var i = 0, frame;
-		for (; frame = frames[i++]; ){
-			if (frame.fn == fn){
-				return true;
+		if(frames){
+			var i = 0, frame;
+			for (; frame = frames[i++]; ){
+				if (frame.fn == fn){
+					return true;
+				}
 			}
 		}
 		return false;
@@ -187,19 +190,15 @@ window.console = (function(win){
 			traceRecursion--;
 			return;
 		}
-		try{
-			var frames = [];
-			var fn = arguments.callee;
-			for (;fn = fn.caller;){
-				if (wasVisited(frames, fn)) break;
-				var args = [];
-				var name = getFuncName(fn);
-				if(fn.arguments && name !== 'eval'){
-					frames.push({ name: name });
-				}
+		
+		var frames = [];
+		var fn = arguments.callee;
+		for (;fn = fn.caller;){
+			var name = getFuncName(fn);
+			if (wasVisited(frames, fn)) break;
+			if(name !== 'eval'){
+				frames.push({ name: name, fn : fn });
 			}
-		}catch(e){
-			log(e);
 		}
 
 		if(!err){
