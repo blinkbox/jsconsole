@@ -194,8 +194,8 @@ window.console = (function(win){
 		var frames = [];
 		var fn = arguments.callee;
 		for (;fn = fn.caller;){
-			var name = getFuncName(fn);
 			if (wasVisited(frames, fn)) break;
+			var name = getFuncName(fn);
 			if(name !== 'eval'){
 				frames.push({ name: name, fn : fn });
 			}
