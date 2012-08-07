@@ -9,9 +9,25 @@ window.console = (function(win){
 	var counters = {};
 	var timeCounters = {};
 	var withoutScope = ['dir','dirxml'];
-	var toDoList = ['group','groupCollapsed','groupEnd','profile','profileEnd','markTimeline','timeStamp'];
+	var toDoList = ['group','groupCollapsed','groupEnd','markTimeline','timeStamp'];
 	var logger;
 	var loggerStyle = 'background-color: lightgrey; border: 5px solid white; position: absolute; height : 200px; width : 400px; z-index: 1000; margin: 200px 400px; padding: 5px; color: black; font-size: 12px;';
+
+	var isConsoleProfileSupported = false;
+	var profilesTitle = [];
+	var activeProfiles = [];
+	var profiles = [];
+	var profileId = 0;
+	var nodeDepth = 0;
+	var isProfilerEnabled = false;
+	
+	try{
+		if(typeof _console.profiles === 'object'){
+			_console.profile('enableCheck');
+			_console.profileEnd();
+			isConsoleProfileSupported = _console.profiles.length > 0;
+		}
+	}catch(e){}
 	
 	function createUI(){
 		if(logger){
@@ -84,15 +100,20 @@ window.console = (function(win){
 			nLen = 0,
             parts = [],
             names = [],
-			typeList = ['[object String]', '[object Error]', '[object Arguments]', '[object Array]', '[object Object]', '[object Number]', '[object Boolean]', '[object Function]','[object ErrorEvent]'];
-		
+			typeList = ['[object String]', '[object Error]', '[object Arguments]', '[object Array]', '[object Object]', '[object Number]', '[object Boolean]', '[object Function]','[object ErrorEvent]','[object ScriptProfileNode]','[object ScriptProfile]','object'];
+
+		if (typeList.indexOf(type) === -1) {
+			type = typeof(type);
+		}
+			
 		if (typeList.indexOf(type) > -1) {
+			
 			switch(type){
 				case '[object Error]' :
 				case '[object ErrorEvent]' :
 							o = o.message;
 				case '[object String]' :
-							json = '"' + o.replace(/\n/g, '\\n').replace(/"/g, '\\"') + '"';
+							json = '"' + o.replace(/\n/g, '\\n').replace(/"/g, '\\"').replace(/</g, '').replace(/>/g, '') + '"';
 							break;
 				case '[object Arguments]' :
 							o = Array.prototype.slice.call(o);
@@ -104,6 +125,9 @@ window.console = (function(win){
 							json += parts.join(', ') + ']';
 							json;
 							break;
+				case 'object' :
+				case '[object ScriptProfile]' :
+				case '[object ScriptProfileNode]' :
 				case '[object Object]' :
 							json = '{ ';
 							for (i in o) {
@@ -116,6 +140,10 @@ window.console = (function(win){
 							if(o.constructor && o.constructor.name){
 								parts[pLen++] = stringify('constructor') + ': ' + stringify(o.constructor.name);
 							}
+							if(type === '[object ScriptProfileNode]'){
+								parts[pLen++] = stringify('children') + ': ' + stringify(o.children());
+							}
+							
 							json += parts.join(', ') + '}';
 							break;
 							
@@ -160,7 +188,58 @@ window.console = (function(win){
 		return Array.prototype.slice.call(arguments)
 	}
 
-
+	function getProfile(title){
+		var i  = 0, item;
+		for(; item = activeProfiles[i++]; ){
+			if(item.title === title){
+				return item;
+			}
+		}
+		return null;
+	}
+	
+	function getChildNode(list, depth, currentDepth){
+		currentDepth = currentDepth || 1;
+		if(currentDepth < depth){
+			return getChildNode(list.children[list.children.length-1], depth, ++currentDepth);
+		}else{
+			return list;
+		}
+	}
+	
+	function getProfileNode(list, funName, file, line){
+		var i  = 0, item;
+		for(; item = list[i++]; ){
+			if( item.functionName === funName && 
+				item.url === file && 
+				item.lineNumber === line){
+				
+				return item;
+			}
+		}
+		return null;
+	}
+	
+	function ScriptProfile(title, uid){
+		this.head = new ScriptProfileNode("(root)","",0);
+		this.title = title;
+		this.uid = uid;
+		this.active = true;
+	};
+	
+	function ScriptProfileNode(functionName, file, line){
+		this.functionName = functionName;
+		this.lineNumber = line;
+		this.url = file;
+		this.callUID = 10001;
+		this.numberOfCalls = 0;
+		this._startTime = +(new Date());
+		this._endTime = 0;
+		this.selfTime = 0;
+		this.totalTime = 0;
+		this.visible = true;
+		this.children = [];
+	};
 
 	// ADDITIONAL CONSOLE methods //
 	function show(){
@@ -266,6 +345,64 @@ window.console = (function(win){
 		return frames;
     };
 	
+	function profilerOut(){
+		if(!isConsoleProfileSupported && isProfilerEnabled){
+			if(nodeDepth){
+				var i = 0, item, endTime = +(new Date());
+				for(; item = activeProfiles[i++]; ){
+					updateScriptNode(getChildNode(item.head, nodeDepth+1), endTime);
+				}
+				--nodeDepth;
+			}
+		}
+	}
+	
+	function updateScriptNode(node, endTime){
+		if(node){
+			node._endTime = endTime;
+			
+			/*
+			if(node.children.length > 0){
+				var min = node.children[0]._startTime;
+				for(var j = 0, item; item = node.children[j++];){
+					min = Math.min(item._startTime, min);
+					if(item.children.length > 0){
+						updateScriptNode(item, endTime);
+					}else if(!item._endTime){
+						item._endTime = endTime;
+						item.totalTime = (item._endTime - item._startTime);
+					}
+				};
+				
+				node.totalTime = (node._endTime - min);
+			}else{
+				node.totalTime = (node._endTime - node._startTime);
+			}
+			*/
+			
+			node.totalTime = (node._endTime - node._startTime);
+		}	
+	}
+	
+	function profiler(functionName, file, line){
+		if(!isConsoleProfileSupported && isProfilerEnabled){
+			++nodeDepth;
+			var profileNode = new ScriptProfileNode(functionName, file, line);
+			var i = 0, item;
+			for(; item = activeProfiles[i++]; ){
+				var node = getChildNode(item.head, nodeDepth);
+				if(node){
+					var pNode = getProfileNode(node.children, functionName, file, line);
+					if(pNode){
+						++pNode.numberOfCalls;
+						//pNode.selfTime = (profileNode._startTime - pNode._startTime);
+					}else{
+						node.children.push(profileNode);
+					}
+				}
+			}
+		}
+	}
 	
 	// ----- Override CONSOLE methods -----//
 	function log() { 
@@ -359,7 +496,59 @@ window.console = (function(win){
 			sendLog(arguments, "timeEnd", label);
         }
 	};
-	
+	function profile(title) { 
+		title = title || 'Profile '+(++profileId);
+		
+		if(profilesTitle.indexOf(title) === -1){
+			profilesTitle.push(title);
+			if(!isConsoleProfileSupported){
+				activeProfiles.push(new ScriptProfile(title, profileId));
+				isProfilerEnabled = true;
+			};
+			sendLog([title], "profile", 'Profile "'+ title +'" started.');
+		}else{
+			warn(title + " profile already active.");
+		}
+	};
+	function profileEnd(title) { 
+		if(!title){
+			title = profilesTitle[profilesTitle.length-1];
+		}
+		var index = profilesTitle.indexOf(title);
+		if(index > -1){
+			if(!isConsoleProfileSupported){
+				var profile = getProfile(title);
+				if(profile){
+					delete profile.active;
+					var head = profile.head;
+					if(!head.totalTime){
+						if(head.children.length > 0){
+							var min = 0, max = 0;
+							for(var i = 0, item; item = head.children[i++]; ){
+								if(!min){
+									min = item._startTime;
+								};
+								
+								min = Math.min(min, item._startTime);
+								max = Math.max(max, item._endTime);
+							}
+							head.totalTime = (max - min);
+							head._startTime = min;
+							head._endTime = max;
+						}else{
+							head.totalTime = (+(new Date()) - head._startTime);
+						}
+					}
+					profiles.push(profile);
+				};
+			};
+			profilesTitle.splice(index, 1);
+			isProfilerEnabled = profilesTitle.length > 0;
+			sendLog([title], "profileEnd", 'Profile "'+ title +'" finished.');
+		}else{
+			warn(title + " profile don't exist.");
+		}
+	};	
 	
 	// ----- Override CONSOLE methods TODO -----//
 	function group() { 
@@ -370,12 +559,6 @@ window.console = (function(win){
 	};
 	function groupEnd() { 
 		sendLog(arguments, "groupEnd");
-	};
-	function profile(title) { 
-		sendLog(arguments, "profile");
-	};
-	function profileEnd() { 
-		sendLog(arguments, "profileEnd");
 	};
 	function markTimeline() { 
 		sendLog(arguments, "markTimeline");
@@ -420,7 +603,13 @@ window.console = (function(win){
 		clear : clear,
 		warn: warn,
 		
+		get profiles(){
+			return isConsoleProfileSupported ? _console.profiles : profiles;
+		},
+		
 		// ADDITIONAL methods //
+		profiler: profiler,
+		profilerOut : profilerOut,
 		stringify : stringify,
 		getStack : traceStack,
 		connectTo : connectTo,
