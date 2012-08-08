@@ -222,6 +222,10 @@ window.JSON = window.JSON || {};
 
     function updateChromeStackFrames(frames, items)
     {
+		//e.g 
+		// Error: unknow error
+		// at functionName1 (http://yourwebsite/test.js:1000:10)
+		// at functionName2 (http://yourwebsite/test.js:2000:10)
         var reChromeStackItem = /^\s+at\s+(.*)((?:http|https|ftp|file):\/\/.*)$/,
             reChromeStackItemName = /\s*\($/,
             reChromeStackItemValue = /^(.+)\:(\d+\:\d+)\)?$/,
@@ -289,6 +293,13 @@ window.JSON = window.JSON || {};
 
     function updateOperaStackFrames(frames, items)
     {
+		//e.g 
+		// Error: unknow error
+		// functionName1([arguments not available])@http://yourwebsite/test.js:1000
+		// functionName2([arguments not available])@http://yourwebsite/test.js:2000
+		//
+		// Error created at functionName1([arguments not available])@http://yourwebsite/test.js:1000
+		// functionName2([arguments not available])@http://yourwebsite/test.js:2000
         var reOperaStackItem = /^(.*)@(.*)$/,
             reOperaStackItemValue = /^(.+)\:(\d+)$/,
             framePos = 2,
