@@ -76,7 +76,13 @@
 		};
 
 		//init
-		window.console.connectTo(sendToServer);
+		function fallback (){}
+		console.logToUI = console.logToUI || fallback;
+		console.profiler = console.profiler || fallback;
+		console.profilerOut = console.profilerOut || fallback;
+		if(console.connectTo){
+			console.connectTo(sendToServer);
+		}
 		
 		if(window.addEventListener){
 			window.addEventListener('message', function (event) {
