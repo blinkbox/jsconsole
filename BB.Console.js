@@ -4,11 +4,7 @@ window.JSON = window.JSON || {};
 
 (function () {
     var nativeConsole = window.nativeConsole = window.console,
-        userAgent = navigator.userAgent.toLowerCase(),
-        isFirefox = /firefox/.test(userAgent),
-        isOpera = /opera/.test(userAgent),
-        isWebkit = /webkit/.test(userAgent),
-        traceRecursion = 0,
+		browserMode = null,
         countId = "_",
         counters = {},
         timeCounters = {},
@@ -220,148 +216,6 @@ window.JSON = window.JSON || {};
     }
     /*ignore jslint end*/
 
-    function updateChromeStackFrames(frames, items)
-    {
-		//e.g 
-		// Error: unknow error
-		// at functionName1 (http://yourwebsite/test.js:1000:10)
-		// at functionName2 (http://yourwebsite/test.js:2000:10)
-        var reChromeStackItem = /^\s+at\s+(.*)((?:http|https|ftp|file):\/\/.*)$/,
-            reChromeStackItemName = /\s*\($/,
-            reChromeStackItemValue = /^(.+)\:(\d+\:\d+)\)?$/,
-            framePos = 0,
-            i = 1,
-            length = items.length;
-
-        for (;i < length; i++, framePos++)
-        {
-            var frame = frames[framePos],
-                item = items[i],
-                match = item.match(reChromeStackItem);
-
-            if (frame && match)
-            {
-                var name = match[1],
-                    value = match[2].match(reChromeStackItemValue);
-
-                if (name)
-                {
-                    name = name.replace(reChromeStackItemName, "");
-                    frame.name = name;
-                }
-                
-                if (value)
-                {
-                    frame.href = value[1];
-                    frame.lineNo = value[2];
-                }
-            }
-        }
-
-        return frames;
-    }
-
-    function updateFireFoxStackFrames(frames, stack)
-    {
-		// Error: unknow error
-		// functionName1((void 0), function(){},[Object object])@http://yourwebsite/test.js:1000
-		// ((void 0), function{
-		//  ---------------------function body--------------------
-		// },[Object object])@http://yourwebsite/test.js:2000
-		// ()@http://yourwebsite/test.js:200
-		
-		stack = stack.replace(/\n\n|\r\r/img, "");
-		var stackItems = stack.split(/[\n\r]/),
-			reFirefoxStackItem = /^(.*)@(.*)$/,
-            reFirefoxStackItemValue = /^(.+)\:(\d+)$/,
-			idx = 0,
-			i = 0,
-			length = 0,
-			items = [],
-            framePos = 1,
-			ii = stackItems.length;
-			
-		for(; i < ii; i++)
-		{
-			var item = stackItems[i],
-				value = item || '';
-				
-			if(value.indexOf('@http') > -1){
-				if(idx){
-					items[idx] += value;
-				}else{
-					items[length++] = value;
-				}
-				idx = 0;
-			}else{
-				if(idx){
-					items[idx] += value;
-				}else{
-					idx = length;
-					items[length++] = value;
-				}
-			}
-		}
-
-        for (i = 0;i < length; i++, framePos++)
-        {
-            var frame = frames[framePos],
-                item = items[i],
-                match = item.match(reFirefoxStackItem);
-
-            if (frame && match)
-            {
-                var name = match[1],
-                    value = match[2].match(reFirefoxStackItemValue);
-
-                if (frame && value)
-                {
-                    frame.href = value[1];
-                    frame.lineNo = value[2];
-                }
-            }
-        }
-
-        return frames;
-    }
-
-    function updateOperaStackFrames(frames, items)
-    {
-		//e.g 
-		// Error: unknow error
-		// functionName1([arguments not available])@http://yourwebsite/test.js:1000
-		// functionName2([arguments not available])@http://yourwebsite/test.js:2000
-		//
-		// Error created at functionName1([arguments not available])@http://yourwebsite/test.js:1000
-		// functionName2([arguments not available])@http://yourwebsite/test.js:2000
-        var reOperaStackItem = /^(.*)@(.*)$/,
-            reOperaStackItemValue = /^(.+)\:(\d+)$/,
-            framePos = 2,
-            i = 0,
-            length = items.length >> 1;
-
-        for (;i < length; i++, framePos++)
-        {
-            var frame = frames[framePos],
-                item = items[i],
-                match = item.match(reOperaStackItem);
-
-            if (frame && match)
-            {
-                var name = match[1],
-                    value = match[2].match(reOperaStackItemValue);
-
-                if (frame && value)
-                {
-                    frame.href = value[1];
-                    frame.lineNo = value[2];
-                }
-            }
-        }
-
-        return frames;
-    }
-
     function getProfile(title)
     {
         var i = 0,
@@ -448,64 +302,229 @@ window.JSON = window.JSON || {};
         }
     }
 
-    function traceStack(err)
-    {
-        traceRecursion++;
-        if (traceRecursion > 1)
-        {
-            traceRecursion--;
-            return;
+	
+	function createException() {
+        try {
+            undef();
+        } catch (e) {
+            return e;
         }
-
-        var frames = [],
-            fn = arguments.callee;
-
-        for (;(fn = fn.caller);)
-        {
-            if (wasVisited(frames, fn)) break;
-
-            var name = getFuncName(fn);
-            if (name !== 'eval')
-            {
-                frames.push({
-                    name: name,
-                    fn: fn
-                });
+    }
+	
+	function modeCheck(e) {
+        if (e.hasOwnProperty('arguments') && e.stack) {
+            return 'chrome';
+        } else if (typeof e.message === 'string' && typeof window !== 'undefined' && window.opera) {
+            if (!e.stacktrace) {
+                return 'opera9';
             }
-        }
-
-        if (!err)
-        {
-            try
-            {
-                (0)();
-            } catch (e)
-            {
-                err = e;
+            if (e.message.indexOf('\n') > -1 && e.message.split('\n').length > e.stacktrace.split('\n').length) {
+                return 'opera9';
             }
+            if (!e.stack) {
+                return 'opera10a';
+            }
+            if (e.stacktrace.indexOf("called from line") < 0) {
+                return 'opera10b';
+            }
+            return 'opera11';
+        } else if (e.stack) {
+            return 'firefox';
         }
+        return 'other';
+    };
+	
+	var formatter = {
+		chrome: function(e, returnObject) {
+			if(returnObject){
+				var stack = e.stack.replace(/\n\r|\r\n/g, "\n").split(/[\n\r]/),
+					length = stack.length,
+					result = [];
 
-        var items,
-            stack = err.stack || // Firefox / Google Chrome
-                    err.stacktrace || // Opera
-                    "";
-        // normalize line breaks
-        stack = stack.replace(/\n\r|\r\n/g, "\n");
-        items = (isWebkit || isOpera) ? stack.split(/[\n\r]/) : [];
-		
-        if (isWebkit)
-        {
-            frames = updateChromeStackFrames(frames, items);
-        } else if (isFirefox)
-        {
-            frames = updateFireFoxStackFrames(frames, stack);
-        } else if (isOpera)
-        {
-            frames = updateOperaStackFrames(frames, items);
+				for (var i = 0; i < length; i++){
+					var item = stack[i], match = item.match(/^\s+at\s+(.*)((?:http|https|ftp|file):\/\/.*)$/);
+					if (match){
+						var frame = {
+							name : match[1].replace(/\s*\($/, "") || "{anonymous}"
+						}, value = match[2].match(/^(.+)\:(\d+\:\d+)\)?$/);
+						if(value){
+							frame.href = value[1];
+							frame.lineNo = value[2].substring(0, value[2].indexOf(':'));
+						}
+						result.push(frame);
+					}
+				}
+				
+				return result;
+			}else{
+				var stack = (e.stack + '\n').replace(/^\S[^\(]+?[\n$]/gm, '').
+					replace(/^\s+(at eval )?at\s+/gm, '').
+					replace(/^([^\(]+?)([\n$])/gm, '{anonymous}()@$1$2').
+					replace(/^Object.<anonymous>\s*\(([^\)]+)\)/gm, '{anonymous}()@$1').split('\n');
+				stack.pop();
+				return stack;
+			}
+		},
+		firefox: function(e, returnObject) {
+			var stack = e.stack.replace(/(?:\n@:0)?\s+$/m, '').replace(/^\(/gm, '{anonymous}(').split('\n'),
+				i = 0,
+				idx = 0,
+				count = 0
+				length = stack.length,
+				items = [];
+				
+			for(; i < length; i++){
+				var item = stack[i],
+					value = item || '';
+					
+				if(value.indexOf('@http') > -1){
+					if(idx){
+						items[idx] += value;
+					}else{
+						items[count++] = value;
+					}
+					idx = 0;
+				}else{
+					if(idx){
+						items[idx] += value;
+					}else{
+						idx = count;
+						items[count++] = value;
+					}
+				}
+			}
+
+			items.pop();
+
+			if(returnObject){
+				var item, i = 0, result = [];
+				for(; item = items[i++];){
+					var match = item.match(/^(.*)((?:http|https|ftp|file):\/\/.*)$/);
+					if (match){
+						var name = match[1].replace(/\s*\($/, "") || "{anonymous}",
+							frame = {
+							name : name.substring(0, name.indexOf("("))
+						}, value = match[2].match(/(.+)\:(.+)/);
+
+						if(value){
+							frame.href = value[1];
+							frame.lineNo = value[2];
+						}
+						result.push(frame);
+					}
+				}
+				
+				return result;
+			}else{
+				return items;
+			}
+		},
+		opera11: function(e, returnObject) {
+			var ANON = '{anonymous}', lineRE = /^.*line (\d+), column (\d+)(?: in (.+))? in (\S+):$/;
+			var lines = (e.stacktrace||'').split('\n'), result = [];
+			for (var i = 0, len = lines.length; i < len; i += 2) {
+				var match = lineRE.exec(lines[i]);
+				if (match) {
+					var location = match[4] + ':' + match[1] + ':' + match[2];
+					var fnName = match[3] || "global code";
+					fnName = fnName.replace(/<anonymous function: (\S+)>/, "$1").replace(/<anonymous function>/, ANON);
+					if(returnObject){
+						result.push({
+							name: fnName,
+							href: match[4],
+							lineNo: match[1]
+						});
+					}else{
+						result.push(fnName + '@' + location);
+					}
+				}
+			}
+			return result;
+		},
+		opera10b: function(e, returnObject) {
+			var lineRE = /^(.*)@(.+):(\d+)$/;
+			var lines = (e.stacktrace||'').split('\n'), result = [];
+			for (var i = 0, len = lines.length; i < len; i++) {
+				var match = lineRE.exec(lines[i]);
+				if (match) {
+					var fnName = match[1]? (match[1] + '()') : "global code";
+					if(returnObject){
+						result.push({
+							name: fnName,
+							href: match[2],
+							lineNo: match[3]
+						});
+					}else{
+						result.push(fnName + '@' + match[2] + ':' + match[3]);					
+					}
+				}
+			}
+			return result;
+		},
+		opera10a: function(e, returnObject) {
+			var ANON = '{anonymous}', lineRE = /Line (\d+).*script (?:in )?(\S+)(?:: In function (\S+))?$/i;
+			var lines = (e.stacktrace||'').split('\n'), result = [];
+			for (var i = 0, len = lines.length; i < len; i += 2) {
+				var match = lineRE.exec(lines[i]);
+				if (match) {
+					var fnName = match[3] || ANON;
+					if(returnObject){
+						result.push({
+							name: fnName,
+							href: match[2],
+							lineNo: match[1]
+						});
+					}else{
+						result.push(fnName + '()@' + match[2] + ':' + match[1]);
+					}
+				}
+			}
+			return result;
+		},
+		opera9: function(e, returnObject) {
+			var ANON = '{anonymous}', lineRE = /Line (\d+).*script (?:in )?(\S+)/i;
+			var lines = e.message.split('\n'), result = [];
+			for (var i = 2, len = lines.length; i < len; i += 2) {
+				var match = lineRE.exec(lines[i]);
+				if (match) {
+					if(returnObject){
+						result.push({
+							name: ANON,
+							href: match[2],
+							lineNo: match[1]
+						});
+					}else{
+						result.push(ANON + '()@' + match[2] + ':' + match[1]);
+					}
+				}
+			}
+			return result;
+		},
+		other: function(curr, returnObject) {
+			var ANON = '{anonymous}', fnRE = /function\s*([\w\-$]+)?\s*\(/i, stack = [], fn, args, maxStackSize = 30;
+			while (curr && curr['arguments'] && stack.length < maxStackSize) {
+				fn = fnRE.test(curr.toString()) ? RegExp.$1 || ANON : ANON;
+				args = Array.prototype.slice.call(curr['arguments'] || []);
+				if(returnObject){
+					stack[stack.length] = { name: fn };
+				}else{
+					stack[stack.length] = fn + '(' + stringify(args, true) + ')';				
+				}
+				curr = curr.caller;
+			}
+			return stack;
+		}	
+	};
+	
+	
+    function traceStack(err, returnObject){
+		err = err || createException();
+        browserMode = browserMode || modeCheck(err);
+        if (browserMode === 'other') {
+            return formatter.other(arguments.callee, returnObject);
+        } else {
+            return formatter[browserMode](err, returnObject);
         }
-
-        traceRecursion--;
-        return frames;
     };
 
     function profilerOut()
