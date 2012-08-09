@@ -261,15 +261,49 @@ window.JSON = window.JSON || {};
         return frames;
     }
 
-    function updateFireFoxStackFrames(frames, items)
+    function updateFireFoxStackFrames(frames, stack)
     {
-        var reFirefoxStackItem = /^(.*)@(.*)$/,
+		// Error: unknow error
+		// functionName1((void 0), function(){},[Object object])@http://yourwebsite/test.js:1000
+		// ((void 0), function{
+		//  ---------------------function body--------------------
+		// },[Object object])@http://yourwebsite/test.js:2000
+		// ()@http://yourwebsite/test.js:200
+		
+		stack = stack.replace(/\n\n|\r\r/img, "");
+		var stackItems = stack.split(/[\n\r]/),
+			reFirefoxStackItem = /^(.*)@(.*)$/,
             reFirefoxStackItemValue = /^(.+)\:(\d+)$/,
-            framePos = 0,
-            i = 1,
-            length = items.length;
+			idx = 0,
+			i = 0,
+			length = 0,
+			items = [],
+            framePos = 1,
+			ii = stackItems.length;
+			
+		for(; i < ii; i++)
+		{
+			var item = stackItems[i],
+				value = item || '';
+				
+			if(value.indexOf('@http') > -1){
+				if(idx){
+					items[idx] += value;
+				}else{
+					items[length++] = value;
+				}
+				idx = 0;
+			}else{
+				if(idx){
+					items[idx] += value;
+				}else{
+					idx = length;
+					items[length++] = value;
+				}
+			}
+		}
 
-        for (;i < length; i++, framePos++)
+        for (i = 0;i < length; i++, framePos++)
         {
             var frame = frames[framePos],
                 item = items[i],
@@ -457,14 +491,14 @@ window.JSON = window.JSON || {};
                     "";
         // normalize line breaks
         stack = stack.replace(/\n\r|\r\n/g, "\n");
-        items = stack.split(/[\n\r]/);
-
+        items = (isWebkit || isOpera) ? stack.split(/[\n\r]/) : [];
+		
         if (isWebkit)
         {
             frames = updateChromeStackFrames(frames, items);
         } else if (isFirefox)
         {
-            frames = updateFireFoxStackFrames(frames, items);
+            frames = updateFireFoxStackFrames(frames, stack);
         } else if (isOpera)
         {
             frames = updateOperaStackFrames(frames, items);
@@ -790,7 +824,7 @@ window.JSON = window.JSON || {};
 
 	// just in case its readOnly
 	try{
-		window.console = consoleObj;
+		window.BBConsole = window.console = consoleObj;
 	}catch(e){}
 
 } ());
