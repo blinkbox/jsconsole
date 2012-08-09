@@ -197,25 +197,6 @@ window.JSON = window.JSON || {};
         server.call(server, funName, value || stringify(args), stack ? stringify(stack) : '');
     }
 
-    /*ignore jslint start*/
-    function wasVisited(frames, fn)
-    {
-        if (frames)
-        {
-            var i = 0,
-                frame;
-            for (;(frame = frames[i++]);)
-            {
-                if (frame.fn == fn)
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-    /*ignore jslint end*/
-
     function getProfile(title)
     {
         var i = 0,
