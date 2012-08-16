@@ -11,7 +11,7 @@ window.JSON = window.JSON || {};
 		withoutScope = ['dir', 'dirxml'],
 		toDoList = ['group', 'groupCollapsed', 'groupEnd', 'markTimeline', 'timeStamp'],
 		logger,
-		loggerStyle = 'background-color: lightgrey; border: 5px solid white; position: absolute; height : 200px; width : 400px; z-index: 1000; margin: 200px 400px; padding: 5px; color: black; font-size: 12px;',
+		loggerStyle = 'background-color: lightgrey; border: 5px solid white; position: absolute; height : 200px; width : 400px; z-index: 1000; margin: 10px; padding: 5px; color: black; font-size: 12px;',
 		isConsoleProfileSupported = false,
 		profilesTitle = [],
 		activeProfiles = [],
@@ -63,7 +63,8 @@ window.JSON = window.JSON || {};
 	function getFuncName(f) {
 		var name; // in FireFox, Function objects have a name property...
 		if (f) {
-			name = (f.getName instanceof Function) ? f.getName() : f.name || f.toString().match(/function\s*([_$\w\d]*)/)[1];
+			name = (f.getName instanceof Function) ? f.getName() : f.name;
+			name = name || f.toString().match(/function\s*([_$\w\d]*)/)[1];
 		}
 		return name || "anonymous";
 	}
@@ -341,7 +342,6 @@ window.JSON = window.JSON || {};
 			for (; i < length; i++) {
 				var item = stack[i],
 					value = item || '';
-
 				if (value.indexOf('@http') > -1) {
 					if (idx) {
 						items[idx] += value;
@@ -358,7 +358,6 @@ window.JSON = window.JSON || {};
 					}
 				}
 			};
-
 			items.pop();
 
 			if (returnObject) {
@@ -387,9 +386,10 @@ window.JSON = window.JSON || {};
 		},
 		opera11: function (e, returnObject) {
 			var ANON = '{anonymous}',
-				lineRE = /^.*line (\d+), column (\d+)(?: in (.+))? in (\S+):$/;
-			var lines = (e.stacktrace || '').split('\n'),
+				lineRE = /^.*line (\d+), column (\d+)(?: in (.+))? in (\S+):$/,
+				lines = (e.stacktrace || '').split('\n'),
 				result = [];
+				
 			for (var i = 0, len = lines.length; i < len; i += 2) {
 				var match = lineRE.exec(lines[i]);
 				if (match) {
@@ -407,12 +407,14 @@ window.JSON = window.JSON || {};
 					}
 				}
 			};
+			
 			return result;
 		},
 		opera10b: function (e, returnObject) {
-			var lineRE = /^(.*)@(.+):(\d+)$/;
-			var lines = (e.stacktrace || '').split('\n'),
+			var lineRE = /^(.*)@(.+):(\d+)$/,
+				lines = (e.stacktrace || '').split('\n'),
 				result = [];
+
 			for (var i = 0, len = lines.length; i < len; i++) {
 				var match = lineRE.exec(lines[i]);
 				if (match) {
@@ -428,13 +430,15 @@ window.JSON = window.JSON || {};
 					}
 				}
 			};
+			
 			return result;
 		},
 		opera10a: function (e, returnObject) {
 			var ANON = '{anonymous}',
-				lineRE = /Line (\d+).*script (?:in )?(\S+)(?:: In function (\S+))?$/i;
-			var lines = (e.stacktrace || '').split('\n'),
+				lineRE = /Line (\d+).*script (?:in )?(\S+)(?:: In function (\S+))?$/i,
+				lines = (e.stacktrace || '').split('\n'),
 				result = [];
+			
 			for (var i = 0, len = lines.length; i < len; i += 2) {
 				var match = lineRE.exec(lines[i]);
 				if (match) {
@@ -454,9 +458,10 @@ window.JSON = window.JSON || {};
 		},
 		opera9: function (e, returnObject) {
 			var ANON = '{anonymous}',
-				lineRE = /Line (\d+).*script (?:in )?(\S+)/i;
-			var lines = e.message.split('\n'),
+				lineRE = /Line (\d+).*script (?:in )?(\S+)/i,
+				lines = e.message.split('\n'),
 				result = [];
+				
 			for (var i = 2, len = lines.length; i < len; i += 2) {
 				var match = lineRE.exec(lines[i]);
 				if (match) {
@@ -471,6 +476,7 @@ window.JSON = window.JSON || {};
 					}
 				}
 			};
+				
 			return result;
 		},
 		other: function (curr, returnObject) {
@@ -478,20 +484,22 @@ window.JSON = window.JSON || {};
 				fnRE = /function\s*([\w\-$]+)?\s*\(/i,
 				stack = [],
 				fn, args, maxStackSize = 30;
-				try{
-					while (curr && curr['arguments'] && stack.length < maxStackSize) {
-						fn = fnRE.test(curr.toString()) ? RegExp.$1 || ANON : ANON;
-						args = Array.prototype.slice.call(curr['arguments'] || []);
-						if (returnObject) {
-							stack[stack.length] = {
-								name: fn
-							};
-						} else {
-							stack[stack.length] = fn + '(' + stringify(args, true) + ')';
-						}
-						curr = curr.caller;
-					};
-				}catch(e){}
+				
+			try{
+				while (curr && curr['arguments'] && stack.length < maxStackSize) {
+					fn = fnRE.test(curr.toString()) ? RegExp.$1 || ANON : ANON;
+					args = Array.prototype.slice.call(curr['arguments'] || []);
+					if (returnObject) {
+						stack[stack.length] = {
+							name: fn
+						};
+					} else {
+						stack[stack.length] = fn + '(' + stringify(args, true) + ')';
+					}
+					curr = curr.caller;
+				};
+			}catch(e){}
+			
 			return stack;
 		},
 		lookUp : function(fn, returnObject){
@@ -515,6 +523,16 @@ window.JSON = window.JSON || {};
 				}
 			}
 			return frames;
+		},
+		aardwolf : function(returnObject){
+			var stack = Aardwolf.getStack();
+			if(!returnObject){
+				for(var i = 0, ii = stack.length; i < ii; i++){
+					var item = stack[i];
+					stack[i] = item.name + '(' + item.href +':' + item.lineNo +')';
+				}
+			}
+			return stack;
 		}
 	};
 
@@ -530,12 +548,15 @@ window.JSON = window.JSON || {};
 				return [];
 			}
 			
-			if(!!(err.stack || err.stacktrace) || ['opera9','other'].indexOf(browserMode) > -1){
+			if(!!(err.stack || err.stacktrace) || browserMode === 'opera9'){
 				if (browserMode === 'other') {
+					//TODO remove it if not needed
 					return formatter.other(arguments.callee, returnObject);
 				} else {
-					return formatter[browserMode](err, returnObject);
+					return formatter[browserMode](err, returnObject) || [];
 				}
+			}else if(Aardwolf && Aardwolf.getStack){
+				return formatter.aardwolf(returnObject);
 			}else{
 				return formatter.lookUp(arguments.callee, returnObject);
 			}
