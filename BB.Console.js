@@ -253,7 +253,17 @@ window.JSON = window.JSON || {};
 	}
 
 	function logToUI() {
-		createUI().innerHTML += "<li>" + stringify(arguments) + "</li>";
+		var ANON = '{anonymous}',
+			fnRE = /function\s*([\w\-$]+)?\s*\(/i,
+			fn;
+
+		try{
+			fn = fnRE.test(arguments.callee.caller.toString()) ? RegExp.$1 || ANON : ANON;
+		}catch(e){
+			fn = '{anonymous}';
+		}
+			
+		createUI().innerHTML += "<li>"+ fn +':'+ stringify(arguments) + "</li>";
 		show();
 	}
 
@@ -513,6 +523,13 @@ window.JSON = window.JSON || {};
 		try{
 			err = err || createException();
 			browserMode = modeCheck(err);
+			var type = ({}).toString.call(err);
+
+			if(['[object Error]','[object ErrorEvent]'].indexOf(type) === -1){
+				warn(type + ' error type missing!');
+				return [];
+			}
+			
 			if(!!(err.stack || err.stacktrace) || ['opera9','other'].indexOf(browserMode) > -1){
 				if (browserMode === 'other') {
 					return formatter.other(arguments.callee, returnObject);

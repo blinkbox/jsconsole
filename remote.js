@@ -75,14 +75,24 @@
 			}			
 		};
 
+		function fallback (){
+			document.writeln(Array.prototype.slice.call(arguments));
+		}
+		function reportError(){
+			console.error(arguments, 'GLOBAL');
+			return true;
+		}
 		//init
-		function fallback (){}
 		console.logToUI = console.logToUI || fallback;
 		console.profiler = console.profiler || fallback;
 		console.profilerOut = console.profilerOut || fallback;
-		if(console.connectTo){
-			console.connectTo(sendToServer);
-		}
+		console.warn = console.warn || fallback;
+		console.error = console.error || fallback;
+		console.getStack = console.getStack || fallback;
+		console.connectTo = console.connectTo || fallback;
+		console.connectTo(sendToServer);
+		
+		window.onerror = reportError;
 		
 		if(window.addEventListener){
 			window.addEventListener('message', function (event) {
@@ -99,9 +109,7 @@
 				}
 			}, false);
 			
-			window.addEventListener('error', function (event) {
-				console.error(event);
-			}, false);
+			window.addEventListener('error', reportError, false);
 		}
 
 		
